@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>X7 Liquidation</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #080b0f;
+      --panel: #0d1117;
+      --border: #1c2733;
+      --eth: #627eea;
+      --pol: #8247e5;
+      --arb: #28a0f0;
+      --green: #00e676;
+      --red: #ff3d57;
+      --text: #c9d1d9;
+      --muted: #586069;
+      --white: #f0f6fc;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      padding: 0 0 60px 0;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 40px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--white);
+    }
+
+    .logo span { color: var(--green); }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--green);
+      letter-spacing: 2px;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.3); }
+    }
+
+    .main { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+
+    /* Combined Stats */
+    .combined {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--white);
+    }
+
+    .stat-value.green { color: var(--green); }
+
+    /* Network Cards */
+    .networks {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .net-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .net-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .net-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .net-dot.eth { background: var(--eth); }
+    .net-dot.pol { background: var(--pol); }
+    .net-dot.arb { background: var(--arb); }
+
+    .net-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .net-stat { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+    .net-stat-label { color: var(--muted); }
+    .net-stat-value { color: var(--text); font-weight: 600; }
+    .net-stat-value.green { color: var(--green); }
+
+    /* Withdrawal */
+    .withdraw-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 40px;
+    }
+
+    .panel-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 20px;
+    }
+
+    .withdraw-form {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .amount-wrap { position: relative; flex: 1; }
+
+    .amount-wrap span {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .amount-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 14px 14px 28px;
+      color: var(--white);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .amount-input:focus { border-color: var(--green); }
+
+    .transfer-btn {
+      background: var(--green);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 14px 28px;
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .transfer-btn:hover { opacity: 0.85; }
+    .transfer-btn:active { transform: scale(0.98); }
+    .transfer-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .withdraw-msg {
+      margin-top: 12px;
+      font-size: 12px;
+      padding: 10px 14px;
+      border-radius: 5px;
+      display: none;
+    }
+
+    .withdraw-msg.success { background: #00e67620; color: var(--green); border: 1px solid #00e67640; display: block; }
+    .withdraw-msg.error { background: #ff3d5720; color: var(--red); border: 1px solid #ff3d5740; display: block; }
+
+    /* Liquidations Feed */
+    .feed-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .feed-table { width: 100%; }
+
+    .feed-row {
+      display: grid;
+      grid-template-columns: 110px 90px 90px 90px 1fr 90px 120px;
+      gap: 8px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      align-items: center;
+      transition: background 0.15s;
+    }
+
+    .feed-row:hover { background: #ffffff05; }
+
+    .feed-row.header {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: #0a0f15;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .badge.eth { background: #627eea20; color: var(--eth); }
+    .badge.pol { background: #8247e520; color: var(--pol); }
+    .badge.arb { background: #28a0f020; color: var(--arb); }
+    .badge.ok { background: #00e67620; color: var(--green); }
+    .badge.fail { background: #ff3d5720; color: var(--red); }
+
+    .profit { color: var(--green); font-weight: 600; }
+    .scan-link { color: var(--arb); text-decoration: none; font-size: 11px; }
+    .scan-link:hover { text-decoration: underline; }
+
+    .empty {
+      padding: 48px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .addr { color: var(--muted); font-size: 11px; }
+
+    @media (max-width: 900px) {
+      .combined { grid-template-columns: 1fr 1fr; }
+      .networks { grid-template-columns: 1fr; }
+      .feed-row { grid-template-columns: 80px 70px 1fr 80px; }
+      .feed-row > :nth-child(5),
+      .feed-row > :nth-child(6) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">X7 <span>LIQUIDATION</span></div>
+  <div class="live-badge"><div class="live-dot"></div>MONITORING</div>
+</header>
+
+<div class="main">
+
+  <!-- Combined Stats -->
+  <div class="combined">
+    <div class="stat-card">
+      <div class="stat-label">Total Net Profit</div>
+      <div class="stat-value green" id="totalProfit">$0.00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Liquidations Identified</div>
+      <div class="stat-value" id="totalExecutions">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Gas Spent (Est)</div>
+      <div class="stat-value" id="totalGas">$0.00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Treasury Balance</div>
+      <div class="stat-value green" id="treasuryBalance">$0.00</div>
+    </div>
+  </div>
+
+  <!-- Per-Network Stats -->
+  <div class="networks">
+    <div class="net-card">
+      <div class="net-header">
+        <div class="net-dot eth"></div>
+        <div class="net-name">Ethereum</div>
+      </div>
+      <div class="net-stat"><span class="net-stat-label">Identified</span><span class="net-stat-value" id="eth-exec">0</span></div>
+      <div class="net-stat"><span class="net-stat-label">Net Profit</span><span class="net-stat-value green" id="eth-profit">$0.00</span></div>
+      <div class="net-stat"><span class="net-stat-label">Success Rate</span><span class="net-stat-value" id="eth-rate">0%</span></div>
+      <div class="net-stat"><span class="net-stat-label">Gas Est</span><span class="net-stat-value" id="eth-gas">$0.00</span></div>
+    </div>
+    <div class="net-card">
+      <div class="net-header">
+        <div class="net-dot pol"></div>
+        <div class="net-name">Polygon</div>
+      </div>
+      <div class="net-stat"><span class="net-stat-label">Identified</span><span class="net-stat-value" id="pol-exec">0</span></div>
+      <div class="net-stat"><span class="net-stat-label">Net Profit</span><span class="net-stat-value green" id="pol-profit">$0.00</span></div>
+      <div class="net-stat"><span class="net-stat-label">Success Rate</span><span class="net-stat-value" id="pol-rate">0%</span></div>
+      <div class="net-stat"><span class="net-stat-label">Gas Est</span><span class="net-stat-value" id="pol-gas">$0.00</span></div>
+    </div>
+    <div class="net-card">
+      <div class="net-header">
+        <div class="net-dot arb"></div>
+        <div class="net-name">Arbitrum</div>
+      </div>
+      <div class="net-stat"><span class="net-stat-label">Identified</span><span class="net-stat-value" id="arb-exec">0</span></div>
+      <div class="net-stat"><span class="net-stat-label">Net Profit</span><span class="net-stat-value green" id="arb-profit">$0.00</span></div>
+      <div class="net-stat"><span class="net-stat-label">Success Rate</span><span class="net-stat-value" id="arb-rate">0%</span></div>
+      <div class="net-stat"><span class="net-stat-label">Gas Est</span><span class="net-stat-value" id="arb-gas">$0.00</span></div>
+    </div>
+  </div>
+
+  <!-- Withdrawal -->
+  <div class="withdraw-panel">
+    <div class="panel-title">Manual Withdrawal</div>
+    <div class="withdraw-form">
+      <div class="amount-wrap">
+        <span>$</span>
+        <input class="amount-input" type="number" id="withdrawAmount" placeholder="0.00" min="1" step="0.01" />
+      </div>
+      <button class="transfer-btn" id="transferBtn" onclick="doWithdraw()">Record Withdrawal</button>
+    </div>
+    <div class="withdraw-msg" id="withdrawMsg"></div>
+  </div>
+
+  <!-- Liquidations Feed -->
+  <div class="feed-panel">
+    <div class="feed-header">
+      <div class="panel-title" style="margin:0">Identified Opportunities</div>
+      <div style="font-size:11px;color:var(--muted)" id="feedCount">0 total</div>
+    </div>
+    <div class="feed-row header">
+      <span>NETWORK</span>
+      <span>DEBT</span>
+      <span>COLLATERAL</span>
+      <span>HF</span>
+      <span>BORROWER</span>
+      <span>NET PROFIT</span>
+      <span>STATUS</span>
+    </div>
+    <div id="feedBody">
+      <div class="empty">Scanning all 3 networks for underwater positions...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const networkClass = { ethereum: 'eth', polygon: 'pol', arbitrum: 'arb' };
+
+  async function fetchStats() {
+    try {
+      const res = await fetch('/api/stats');
+      const data = await res.json();
+
+      document.getElementById('totalProfit').textContent = '$' + Number(data.combined.totalProfitUSD).toLocaleString('en-US', { minimumFractionDigits: 2 });
+      document.getElementById('totalExecutions').textContent = data.combined.totalExecutions;
+      document.getElementById('totalGas').textContent = '$' + Number(data.combined.totalGasSpent).toFixed(2);
+      document.getElementById('treasuryBalance').textContent = '$' + Number(data.combined.treasuryBalance).toFixed(2);
+
+      for (const [net, stats] of Object.entries(data.networks)) {
+        const k = net.slice(0,3);
+        const el = (id) => document.getElementById(`${k}-${id}`);
+        if (el('exec')) {
+          el('exec').textContent = stats.successful;
+          el('profit').textContent = '$' + Number(stats.totalProfit).toFixed(2);
+          el('rate').textContent = stats.successRate;
+          el('gas').textContent = '$' + Number(stats.totalGas).toFixed(2);
+        }
+      }
+    } catch (e) { console.error('Stats fetch error:', e); }
+  }
+
+  async function fetchLiquidations() {
+    try {
+      const res = await fetch('/api/liquidations');
+      const data = await res.json();
+      const body = document.getElementById('feedBody');
+      document.getElementById('feedCount').textContent = data.count + ' total';
+
+      if (!data.liquidations || data.liquidations.length === 0) {
+        body.innerHTML = '<div class="empty">Scanning all 3 networks for underwater positions...</div>';
+        return;
+      }
+
+      body.innerHTML = data.liquidations.map(liq => {
+        const nc = networkClass[liq.network] || 'eth';
+        const statusBadge = liq.status === 'identified' 
+          ? '<span class="badge ok">IDENTIFIED</span>' 
+          : '<span class="badge fail">FAILED</span>';
+
+        return `<div class="feed-row">
+          <span><span class="badge ${nc}">${liq.network.toUpperCase()}</span></span>
+          <span>${liq.debtAsset || '—'}</span>
+          <span>${liq.collateralAsset || '—'}</span>
+          <span class="addr">${liq.healthFactor}</span>
+          <span class="addr">${liq.borrower ? liq.borrower.slice(0,12)+'...' : '—'}</span>
+          <span class="profit">$${liq.netProfitUSD}</span>
+          <span>${statusBadge}</span>
+        </div>`;
+      }).join('');
+    } catch (e) { console.error('Liquidations fetch error:', e); }
+  }
+
+  async function doWithdraw() {
+    const input = document.getElementById('withdrawAmount');
+    const btn = document.getElementById('transferBtn');
+    const msg = document.getElementById('withdrawMsg');
+    const amount = parseFloat(input.value);
+
+    if (!amount || amount <= 0) {
+      msg.className = 'withdraw-msg error';
+      msg.textContent = 'Please enter a valid amount.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    msg.className = 'withdraw-msg';
+    msg.textContent = '';
+
+    try {
+      const res = await fetch('/api/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        msg.className = 'withdraw-msg success';
+        msg.textContent = `✅ Withdrawal of $${amount.toFixed(2)} recorded. Ref: ${data.reference}`;
+        input.value = '';
+        setTimeout(() => fetchStats(), 500);
+      } else {
+        msg.className = 'withdraw-msg error';
+        msg.textContent = `❌ ${data.error}`;
+      }
+    } catch (e) {
+      msg.className = 'withdraw-msg error';
+      msg.textContent = `❌ Network error: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Record Withdrawal';
+    }
+  }
+
+  // Poll every 10 seconds
+  fetchStats();
+  fetchLiquidations();
+  setInterval(() => { fetchStats(); fetchLiquidations(); }, 10000);
+</script>
+
+</body>
+</html>
