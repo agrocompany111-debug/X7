@@ -10,7 +10,8 @@ const AAVE_POOL_ABI = [
 const ERC20_ABI = [
   'function approve(address spender, uint256 amount) public returns (bool)',
   'function allowance(address owner, address spender) view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)'
+  'function balanceOf(address account) view returns (uint256)',
+  'function decimals() view returns (uint8)'
 ];
 
 class Liquidator {
@@ -18,6 +19,28 @@ class Liquidator {
     this.networkName = networkName;
     this.config = networkConfig;
     this.provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+    
+    // Initialize wallet if PRIVATE_KEY is available
+    if (process.env.PRIVATE_KEY) {
+      try {
+        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+        this.aavePoolWithSigner = new ethers.Contract(
+          networkConfig.aavePoolAddress,
+          AAVE_POOL_ABI,
+          this.wallet
+        );
+        console.log(`[${this.networkName}] ✅ Wallet initialized: ${this.wallet.address}`);
+      } catch (err) {
+        console.error(`[${this.networkName}] ❌ Wallet init failed:`, err.message);
+        this.wallet = null;
+        this.aavePoolWithSigner = null;
+      }
+    } else {
+      console.warn(`[${this.networkName}] ⚠️  No PRIVATE_KEY - monitoring only (no execution)`);
+      this.wallet = null;
+      this.aavePoolWithSigner = null;
+    }
+
     this.aavePool = new ethers.Contract(networkConfig.aavePoolAddress, AAVE_POOL_ABI, this.provider);
     this.executions = [];
     this.stats = { total: 0, successful: 0, failed: 0, totalProfit: 0, totalGas: 0 };
@@ -91,6 +114,7 @@ class Liquidator {
                 totalCollateral,
                 debtAsset: debtReserve.reserve.underlyingAsset,
                 debtAssetSymbol: debtReserve.reserve.symbol,
+                debtDecimals: parseInt(debtReserve.reserve.decimals),
                 debtAmount: Math.max(
                   Number(debtReserve.currentVariableDebt),
                   Number(debtReserve.currentStableDebt)
@@ -118,15 +142,18 @@ class Liquidator {
   async calculateProfit(position) {
     try {
       const feeData = await this.provider.getFeeData();
-      const gasPrice = Number(feeData.gasPrice || 0) / 1e9;
-      const gasUnits = 450000;
+      const gasPrice = Number(feeData.gasPrice || 0);
+      const gasUnits = 500000;
+      const gasCostWei = gasPrice * BigInt(gasUnits);
+      const gasCostEth = Number(ethers.formatEther(gasCostWei));
       const ethPrice = await this.getEthPrice();
-      const gasCostUSD = (gasUnits * gasPrice * 1e-9) * ethPrice;
+      const gasCostUSD = gasCostEth * ethPrice;
 
       const debtToCover = BigInt(Math.floor(position.debtAmount / 2));
-      const liquidationBonus = position.debtAmount * this.config.liquidationBonus;
-      const grossProfitUSD = liquidationBonus / 1e18;
-      const netProfitUSD = grossProfitUSD - gasCostUSD - 20;
+      const liquidationBonusRate = this.config.liquidationBonus;
+      const grossProfitCollateral = debtToCover * BigInt(Math.floor((1 + liquidationBonusRate) * 1e4)) / BigInt(1e4);
+      const grossProfitUSD = Number(ethers.formatUnits(grossProfitCollateral, position.debtDecimals)) * ethPrice;
+      const netProfitUSD = grossProfitUSD - gasCostUSD - 50;
 
       return {
         debtToCover: debtToCover.toString(),
@@ -137,7 +164,7 @@ class Liquidator {
       };
     } catch (error) {
       console.error(`[${this.networkName}] Profit calc error:`, error.message);
-      return { profitable: false, netProfitUSD: 0, gasCostUSD: 0, grossProfitUSD: 0 };
+      return { profitable: false, netProfitUSD: 0, gasCostUSD: 0, grossProfitUSD: 0, debtToCover: '0' };
     }
   }
 
@@ -161,15 +188,82 @@ class Liquidator {
     }
   }
 
-  async buildLiquidationCalldata(position, debtToCover) {
-    const iface = new ethers.Interface(AAVE_POOL_ABI);
-    return iface.encodeFunctionData('liquidationCall', [
-      position.collateralAsset,
-      position.debtAsset,
-      position.borrower,
-      debtToCover,
-      false
-    ]);
+  async approveToken(tokenAddress, spender, amount) {
+    try {
+      const token = new ethers.Contract(tokenAddress, ERC20_ABI, this.wallet);
+      
+      const currentAllowance = await token.allowance(this.wallet.address, spender);
+      
+      if (currentAllowance >= BigInt(amount)) {
+        console.log(`[${this.networkName}] ✅ Token already approved`);
+        return true;
+      }
+
+      console.log(`[${this.networkName}] 🔓 Approving token for ${spender.slice(0, 8)}...`);
+      
+      const approveTx = await token.approve(spender, ethers.MaxUint256, {
+        gasLimit: 100000
+      });
+      
+      await approveTx.wait();
+      console.log(`[${this.networkName}] ✅ Approval tx: ${approveTx.hash}`);
+      
+      return true;
+    } catch (error) {
+      console.error(`[${this.networkName}] ❌ Approval failed:`, error.message);
+      return false;
+    }
+  }
+
+  async executeLiquidation(position, profitData) {
+    try {
+      if (!this.wallet) {
+        console.log(`[${this.networkName}] ⚠️  No wallet - skipping execution`);
+        return { success: false, error: 'No wallet configured', txHash: null };
+      }
+
+      console.log(`[${this.networkName}] 💥 Executing liquidation for ${position.borrower.slice(0, 8)}...`);
+
+      const approved = await this.approveToken(
+        position.debtAsset,
+        this.config.aavePoolAddress,
+        profitData.debtToCover
+      );
+
+      if (!approved) {
+        return { success: false, error: 'Token approval failed', txHash: null };
+      }
+
+      console.log(`[${this.networkName}] 📤 Submitting liquidationCall...`);
+      
+      const tx = await this.aavePoolWithSigner.liquidationCall(
+        position.collateralAsset,
+        position.debtAsset,
+        position.borrower,
+        profitData.debtToCover,
+        false,
+        {
+          gasLimit: 400000,
+          gasPrice: (await this.provider.getFeeData()).gasPrice
+        }
+      );
+
+      console.log(`[${this.networkName}] ⏳ Waiting for confirmation: ${tx.hash}`);
+      
+      const receipt = await tx.wait();
+
+      if (receipt && receipt.status === 1) {
+        console.log(`[${this.networkName}] ✅ EXECUTED! Tx: ${tx.hash} | Block: ${receipt.blockNumber}`);
+        return { success: true, txHash: tx.hash, blockNumber: receipt.blockNumber };
+      } else {
+        console.log(`[${this.networkName}] ❌ Transaction reverted`);
+        return { success: false, error: 'Transaction reverted', txHash: tx.hash };
+      }
+    } catch (error) {
+      const errorMsg = error.reason || error.message || 'Unknown error';
+      console.error(`[${this.networkName}] ❌ Execution error:`, errorMsg);
+      return { success: false, error: errorMsg, txHash: null };
+    }
   }
 
   async processPosition(position) {
@@ -180,7 +274,12 @@ class Liquidator {
       return null;
     }
 
-    console.log(`[${this.networkName}] Found liquidation: ${position.borrower.slice(0, 8)}... HF=${position.healthFactor.toFixed(4)} Est profit=$${profitData.netProfitUSD.toFixed(2)}`);
+    console.log(`[${this.networkName}] 🎯 Found liquidation: ${position.borrower.slice(0, 8)}... HF=${position.healthFactor.toFixed(4)} Est profit=$${profitData.netProfitUSD.toFixed(2)}`);
+
+    let result = { success: false, txHash: null, error: 'No execution' };
+    if (this.wallet) {
+      result = await this.executeLiquidation(position, profitData);
+    }
 
     const execution = {
       timestamp: new Date().toISOString(),
@@ -192,31 +291,36 @@ class Liquidator {
       grossProfitUSD: profitData.grossProfitUSD.toFixed(2),
       gasCostUSD: profitData.gasCostUSD.toFixed(2),
       netProfitUSD: profitData.netProfitUSD.toFixed(2),
-      txHash: null,
-      scanUrl: null,
-      status: 'identified',
-      error: null
+      txHash: result.txHash || null,
+      scanUrl: result.txHash ? `${this.config.scanBaseUrl}${result.txHash}` : null,
+      status: result.success ? 'executed' : 'identified',
+      error: result.error || null
     };
 
     this.executions.unshift(execution);
     if (this.executions.length > 200) this.executions.pop();
 
     this.stats.total++;
-    this.stats.totalProfit += profitData.netProfitUSD;
-    this.stats.totalGas += profitData.gasCostUSD;
+    if (result.success) {
+      this.stats.successful++;
+      this.stats.totalProfit += profitData.netProfitUSD;
+      this.stats.totalGas += profitData.gasCostUSD;
+    } else {
+      this.stats.failed++;
+    }
 
     return execution;
   }
 
   async run() {
-    console.log(`🚀 [${this.networkName}] Liquidator started`);
+    console.log(`🚀 [${this.networkName}] Liquidator started (${this.wallet ? 'EXECUTION ENABLED' : 'MONITORING ONLY'})`);
 
     const scan = async () => {
       try {
         const positions = await this.findUnderwaterPositions();
-        for (const position of positions.slice(0, 5)) {
+        for (const position of positions.slice(0, 3)) {
           await this.processPosition(position);
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 1000));
         }
       } catch (error) {
         console.error(`[${this.networkName}] Scan error:`, error.message);
