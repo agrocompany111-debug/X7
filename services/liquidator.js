@@ -19,6 +19,7 @@ class Liquidator {
     this.networkName = networkName;
     this.config = networkConfig;
     this.provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
+    this.pimlicoProvider = new ethers.JsonRpcProvider(networkConfig.pimlicoRpcUrl);
     
     // Initialize wallet if PRIVATE_KEY is available
     if (process.env.PRIVATE_KEY) {
@@ -30,6 +31,7 @@ class Liquidator {
           this.wallet
         );
         console.log(`[${this.networkName}] ✅ Wallet initialized: ${this.wallet.address}`);
+        console.log(`[${this.networkName}] ⛽ Gas provider: Pimlico (sponsored)`);
       } catch (err) {
         console.error(`[${this.networkName}] ❌ Wallet init failed:`, err.message);
         this.wallet = null;
@@ -234,7 +236,7 @@ class Liquidator {
         return { success: false, error: 'Token approval failed', txHash: null };
       }
 
-      console.log(`[${this.networkName}] 📤 Submitting liquidationCall...`);
+      console.log(`[${this.networkName}] 📤 Submitting liquidationCall via Pimlico...`);
       
       const tx = await this.aavePoolWithSigner.liquidationCall(
         position.collateralAsset,
