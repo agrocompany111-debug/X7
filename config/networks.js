@@ -9,7 +9,9 @@ module.exports = {
     aaveSubgraph: 'https://api.thegraph.com/subgraphs/name/aave/protocol-v3',
     scanBaseUrl: 'https://etherscan.io/tx/',
     minProfitUSD: 100,
-    liquidationBonus: 0.05
+    liquidationBonus: 0.05,
+    pimlicoRpcUrl: `https://api.pimlico.io/v2/ethereum/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
+    pimlicoEntryPoint: '0x5FF137D4b0FDCD49DcA30c7B57b01A3c94eAE940'
   },
   polygon: {
     name: 'Polygon',
@@ -19,7 +21,9 @@ module.exports = {
     aaveSubgraph: 'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-polygon',
     scanBaseUrl: 'https://polygonscan.com/tx/',
     minProfitUSD: 50,
-    liquidationBonus: 0.05
+    liquidationBonus: 0.05,
+    pimlicoRpcUrl: `https://api.pimlico.io/v2/matic/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
+    pimlicoEntryPoint: '0x5FF137D4b0FDCD49DcA30c7B57b01A3c94eAE940'
   },
   arbitrum: {
     name: 'Arbitrum',
@@ -29,6 +33,8 @@ module.exports = {
     aaveSubgraph: 'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-arbitrum',
     scanBaseUrl: 'https://arbiscan.io/tx/',
     minProfitUSD: 75,
-    liquidationBonus: 0.05
+    liquidationBonus: 0.05,
+    pimlicoRpcUrl: `https://api.pimlico.io/v2/arbitrum/rpc?apikey=${process.env.PIMLICO_API_KEY}`,
+    pimlicoEntryPoint: '0x5FF137D4b0FDCD49DcA30c7B57b01A3c94eAE940'
   }
 };
